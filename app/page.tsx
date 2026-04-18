@@ -1,76 +1,36 @@
-import { generatePicks } from "../analysis";
+import { analyzeMatch } from "@/lib/analysis";
 
-type Match = {
-  home: string;
-  away: string;
-  homeProb: number;
-  drawProb: number;
-  awayProb: number;
-  goals: number;
-  btts: number;
-};
+async function getMatches() {
+  const res = await fetch("https://api-football-v1.p.rapidapi.com/v3/fixtures?date=2026-04-18", {
+    headers: {
+      "X-RapidAPI-Key": "COLOCA_SUA_API_KEY_AQUI",
+      "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    },
+    cache: "no-store"
+  });
 
-const matches: Match[] = [
-  {
-    home: "Manchester City",
-    away: "Brighton",
-    homeProb: 0.68,
-    drawProb: 0.2,
-    awayProb: 0.12,
-    goals: 2.9,
-    btts: 0.57,
-  },
-  {
-    home: "Real Madrid",
-    away: "Valencia",
-    homeProb: 0.65,
-    drawProb: 0.22,
-    awayProb: 0.13,
-    goals: 2.7,
-    btts: 0.55,
-  },
-];
+  const data = await res.json();
+  return data.response;
+}
 
-export default function Home() {
+export default async function Home() {
+  const games = await getMatches();
+
   return (
     <main style={{ padding: 20 }}>
       <h1>BetAnalyzer PRO</h1>
-      <h2>Jogos do dia</h2>
 
-      {matches.map((match, index) => {
-        const picks = generatePicks({
-          homeTeam: match.home,
-          awayTeam: match.away,
-          homeWinProb: match.homeProb,
-          drawProb: match.drawProb,
-          awayWinProb: match.awayProb,
-          expectedGoals: match.goals,
-          bttsProb: match.btts,
-        });
+      {games.map((game: any, i: number) => {
+        const analysis = analyzeMatch(game);
 
         return (
-          <div
-            key={index}
-            style={{
-              border: "1px solid #ccc",
-              borderRadius: 10,
-              padding: 15,
-              marginBottom: 20,
-            }}
-          >
-            <h3>
-              {match.home} vs {match.away}
-            </h3>
+          <div key={i} style={{ border: "1px solid #333", marginBottom: 20, padding: 15 }}>
+            <h2>
+              {game.teams.home.name} vs {game.teams.away.name}
+            </h2>
 
-            {picks.map((pick, i) => (
-              <div key={i}>
-                <p>
-                  <strong>{pick.market}:</strong> {pick.suggestion}
-                </p>
-                <p>Confiança: {pick.confidence}%</p>
-                <p>{pick.reason}</p>
-              </div>
-            ))}
+            <p><b>Probabilidade:</b> {analysis.probability}%</p>
+            <p><b>Recomendação:</b> {analysis.pick}</p>
           </div>
         );
       })}
