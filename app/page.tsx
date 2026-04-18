@@ -22,8 +22,8 @@ export default async function Home() {
   const games = await getMatches();
 
   return (
-    <main style={{ padding: 20 }}>
-      <h1>BetAnalyzer PRO</h1>
+    <main style={{ padding: 20, background: "#0b0b0b", minHeight: "100vh", color: "#fff" }}>
+      <h1 style={{ marginBottom: 20 }}>BetAnalyzer PRO</h1>
 
       {games.length === 0 && (
         <p>Nenhum jogo encontrado hoje.</p>
@@ -36,12 +36,11 @@ export default async function Home() {
           <div
             key={i}
             style={{
-              border: "1px solid #333",
+              border: "1px solid #222",
               marginBottom: 20,
               padding: 15,
-              borderRadius: 10,
-              background: "#111",
-              color: "#fff"
+              borderRadius: 12,
+              background: "#111"
             }}
           >
             <h2>
@@ -59,8 +58,21 @@ export default async function Home() {
 
             <hr />
 
-            <p><b>Probabilidade:</b> {analysis.probability}%</p>
-            <p><b>Recomendação:</b> {analysis.pick}</p>
+            {analysis.length === 0 ? (
+              <p>Sem apostas de valor</p>
+            ) : (
+              analysis.map((p: any, idx: number) => (
+                <div key={idx} style={{ marginBottom: 10 }}>
+                  <p>
+                    📊 <b>{p.market}</b> - {p.selection}
+                  </p>
+                  <p>💰 Odd: {p.odd}</p>
+                  <p>📈 EV: {p.ev}</p>
+                  <p>🔥 Confiança: {p.confidence}%</p>
+                  <hr />
+                </div>
+              ))
+            )}
           </div>
         );
       })}
