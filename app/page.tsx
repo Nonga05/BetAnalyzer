@@ -1,81 +1,158 @@
-import { analyzeMatch } from "@/lib/analysis";
+import { analyzeMatch, type MarketPick } from "../lib/analysis";
 
-async function getMatches() {
+type FixtureItem = {
+  fixture: {
+    id: number;
+    date: string;
+    status: { long: string; short: string };
+  };
+  league: {
+    id: number;
+    name: string;
+    country: string;
+    logo?: string;
+  };
+  teams: {
+    home: { name: string; logo?: string };
+    away: { name: string; logo?: string };
+  };
+};
+
+type EnrichedFixture = FixtureItem & {
+  predictions: any | null;
+  odds: any | null;
+  topPicks: MarketPick[];
+};
+
+async function apiFetch(path: string) {
+  const res = await fetch(`https://v3.football.api-sports.io${path}`, {
+    headers: {
+      "x-apisports-key": process.env.RAPID_API_KEY!,
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`API error ${res.status} for ${path}`);
+  }
+
+  return res.json();
+}
+
+async function getTodayFixtures(): Promise<FixtureItem[]> {
   const today = new Date().toISOString().split("T")[0];
+  const data = await apiFetch(`/fixtures?date=${today}&timezone=America/Sao_Paulo`);
+  return data.response ?? [];
+}
 
-  const res = await fetch(
-    `https://api-football-v1.p.rapidapi.com/v3/fixtures?date=${today}`,
-    {
-      headers: {
-        "X-RapidAPI-Key": process.env.RAPID_API_KEY!,
-        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-      },
-      cache: "no-store"
-    }
-  );
+async function enrichFixture(fixture: FixtureItem): Promise<EnrichedFixture> {
+  const fixtureId = fixture.fixture.id;
 
-  const data = await res.json();
-  return data.response || [];
+  const [predictionsResult, oddsResult] = await Promise.allSettled([
+    apiFetch(`/predictions?fixture=${fixtureId}`),
+    apiFetch(`/odds?fixture=${fixtureId}`),
+  ]);
+
+  const predictions =
+    predictionsResult.status === "fulfilled"
+      ? (predictionsResult.value.response?.[0] ?? null)
+      : null;
+
+  const odds =
+    oddsResult.status === "fulfilled"
+      ? (oddsResult.value.response?.[0] ?? null)
+      : null;
+
+  const topPicks = analyzeMatch({ predictions, odds });
+
+  return {
+    ...fixture,
+    predictions,
+    odds,
+    topPicks,
+  };
 }
 
 export default async function Home() {
-  const games = await getMatches();
+  const fixtures = await getTodayFixtures();
+  const enriched = await Promise.all(fixtures.map(enrichFixture));
 
   return (
-    <main style={{ padding: 20, background: "#0b0b0b", minHeight: "100vh", color: "#fff" }}>
-      <h1 style={{ marginBottom: 20 }}>BetAnalyzer PRO</h1>
+    <main
+      style={{
+        padding: 20,
+        background: "#0b0b0b",
+        minHeight: "100vh",
+        color: "#fff",
+      }}
+    >
+      <h1 style={{ marginBottom: 8 }}>BetAnalyzer PRO</h1>
+      <p style={{ opacity: 0.8, marginBottom: 24 }}>Jogos do dia</p>
 
-      {games.length === 0 && (
+      {enriched.length === 0 ? (
         <p>Nenhum jogo encontrado hoje.</p>
-      )}
-
-      {games.map((game: any, i: number) => {
-        const analysis = analyzeMatch(game);
-
-        return (
-          <div
-            key={i}
+      ) : (
+        enriched.map((game, index) => (
+          <section
+            key={`${game.fixture.id}-${index}`}
             style={{
               border: "1px solid #222",
               marginBottom: 20,
-              padding: 15,
-              borderRadius: 12,
-              background: "#111"
+              padding: 16,
+              borderRadius: 14,
+              background: "#111",
             }}
           >
-            <h2>
+            <h2 style={{ marginBottom: 8 }}>
               {game.teams.home.name} vs {game.teams.away.name}
             </h2>
 
-            <p><b>Liga:</b> {game.league.name}</p>
-
-            <p>
-              <b>Data:</b>{" "}
-              {new Date(game.fixture.date).toLocaleString()}
+            <p style={{ margin: "4px 0" }}>
+              <b>Liga:</b> {game.league.name} ({game.league.country})
+            </p>
+            <p style={{ margin: "4px 0" }}>
+              <b>Data:</b> {new Date(game.fixture.date).toLocaleString("pt-BR")}
+            </p>
+            <p style={{ margin: "4px 0 14px" }}>
+              <b>Status:</b> {game.fixture.status.long}
             </p>
 
-            <p><b>Status:</b> {game.fixture.status.long}</p>
-
-            <hr />
-
-            {analysis.length === 0 ? (
-              <p>Sem apostas de valor</p>
+            {game.topPicks.length === 0 ? (
+              <p style={{ opacity: 0.85 }}>Sem mercados suficientes para análise.</p>
             ) : (
-              analysis.map((p: any, idx: number) => (
-                <div key={idx} style={{ marginBottom: 10 }}>
-                  <p>
-                    📊 <b>{p.market}</b> - {p.selection}
+              game.topPicks.map((pick, idx) => (
+                <div
+                  key={`${game.fixture.id}-pick-${idx}`}
+                  style={{
+                    borderTop: idx === 0 ? "1px solid #222" : undefined,
+                    paddingTop: 12,
+                    marginTop: 12,
+                  }}
+                >
+                  <p style={{ margin: "4px 0" }}>
+                    <b>Mercado:</b> {pick.market}
                   </p>
-                  <p>💰 Odd: {p.odd}</p>
-                  <p>📈 EV: {p.ev}</p>
-                  <p>🔥 Confiança: {p.confidence}%</p>
-                  <hr />
+                  <p style={{ margin: "4px 0" }}>
+                    <b>Seleção:</b> {pick.selection}
+                  </p>
+                  <p style={{ margin: "4px 0" }}>
+                    <b>Odd:</b> {pick.odd}
+                  </p>
+                  <p style={{ margin: "4px 0" }}>
+                    <b>Probabilidade:</b> {pick.probability}%
+                  </p>
+                  <p style={{ margin: "4px 0", opacity: 0.75 }}>
+                    <b>Fonte:</b>{" "}
+                    {pick.source === "prediction"
+                      ? "predição da API"
+                      : "probabilidade implícita das odds"}
+                  </p>
                 </div>
               ))
             )}
-          </div>
-        );
-      })}
+          </section>
+        ))
+      )}
     </main>
   );
 }
