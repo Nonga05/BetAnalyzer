@@ -1,11 +1,13 @@
 import { analyzeMatch } from "@/lib/analysis";
 
 async function getMatches() {
+  const today = new Date().toISOString().split("T")[0];
+
   const res = await fetch(
-    "https://api-football-v1.p.rapidapi.com/v3/fixtures?date=2026-04-18",
+    `https://api-football-v1.p.rapidapi.com/v3/fixtures?date=${today}`,
     {
       headers: {
-        "X-RapidAPI-Key": "COLOCA_SUA_API_KEY_AQUI",
+        "X-RapidAPI-Key": process.env.RAPID_API_KEY!,
         "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
       },
       cache: "no-store"
@@ -24,7 +26,7 @@ export default async function Home() {
       <h1>BetAnalyzer PRO</h1>
 
       {games.length === 0 && (
-        <p>Nenhum jogo encontrado.</p>
+        <p>Nenhum jogo encontrado hoje.</p>
       )}
 
       {games.map((game: any, i: number) => {
@@ -37,19 +39,28 @@ export default async function Home() {
               border: "1px solid #333",
               marginBottom: 20,
               padding: 15,
-              borderRadius: 10
+              borderRadius: 10,
+              background: "#111",
+              color: "#fff"
             }}
           >
             <h2>
               {game.teams.home.name} vs {game.teams.away.name}
             </h2>
 
-            <p><b>Data:</b> {new Date(game.fixture.date).toLocaleString()}</p>
+            <p><b>Liga:</b> {game.league.name}</p>
+
+            <p>
+              <b>Data:</b>{" "}
+              {new Date(game.fixture.date).toLocaleString()}
+            </p>
+
+            <p><b>Status:</b> {game.fixture.status.long}</p>
+
+            <hr />
 
             <p><b>Probabilidade:</b> {analysis.probability}%</p>
             <p><b>Recomendação:</b> {analysis.pick}</p>
-
-            <p><b>Status:</b> {game.fixture.status.long}</p>
           </div>
         );
       })}
